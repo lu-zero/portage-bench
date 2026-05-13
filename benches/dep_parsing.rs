@@ -1,0 +1,116 @@
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+
+fn simple_dep() -> &'static str {
+    "dev-libs/openssl"
+}
+
+fn medium_dep() -> &'static str {
+    "dev-libs/openssl sys-libs/zlib ssl? ( dev-libs/nss ) threads? ( sys-libs/libcompat )"
+}
+
+fn complex_dep() -> &'static str {
+    "dev-libs/openssl:0=
+    sys-libs/zlib
+    ssl? (
+        dev-libs/nss
+        || ( dev-libs/libressl dev-libs/openssl:0= )
+    )
+    threads? ( sys-libs/libcompat )
+    || ( sys-libs/glibc sys-libs/musl )
+    !dev-libs/openssl-compat:0"
+}
+
+fn iuse_string() -> &'static str {
+    "ssl debug threads +gtk -wayland X doc test"
+}
+
+fn required_use_string() -> &'static str {
+    "ssl? ( threads ) || ( ssl tls ) ?? ( gtk qt5 ) ^^ ( X wayland )"
+}
+
+fn bench_portage_atom(c: &mut Criterion) {
+    let mut group = c.benchmark_group("portage-atom/DepEntry::parse");
+
+    for (name, input) in [
+        ("simple", simple_dep()),
+        ("medium", medium_dep()),
+        ("complex", complex_dep()),
+    ] {
+        group.bench_with_input(BenchmarkId::new("dep", name), input, |b, input| {
+            b.iter(|| black_box(portage_atom::DepEntry::parse(black_box(input)).unwrap()))
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_portage_metadata(c: &mut Criterion) {
+    let mut group = c.benchmark_group("portage-metadata/RequiredUseExpr::parse");
+
+    group.bench_function("required_use", |b| {
+        b.iter(|| {
+            black_box(
+                portage_metadata::RequiredUseExpr::parse(black_box(required_use_string()))
+                    .unwrap(),
+            )
+        })
+    });
+
+    group.finish();
+}
+
+fn bench_pkgcraft(c: &mut Criterion) {
+    use pkgcraft::dep::DependencySet;
+    use pkgcraft::eapi::EAPI_LATEST_OFFICIAL;
+
+    let eapi = *EAPI_LATEST_OFFICIAL;
+    let mut group = c.benchmark_group("pkgcraft/DependencySet::package");
+
+    for (name, input) in [
+        ("simple", simple_dep()),
+        ("medium", medium_dep()),
+        ("complex", complex_dep()),
+    ] {
+        group.bench_with_input(BenchmarkId::new("dep", name), input, |b, input| {
+            b.iter(|| black_box(DependencySet::package(black_box(input), eapi).unwrap()))
+        });
+    }
+
+    group.bench_function("required_use", |b| {
+        b.iter(|| {
+            black_box(DependencySet::required_use(black_box(required_use_string())).unwrap())
+        })
+    });
+
+    group.finish();
+}
+
+fn bench_comparison(c: &mut Criterion) {
+    use pkgcraft::dep::DependencySet;
+    use pkgcraft::eapi::EAPI_LATEST_OFFICIAL;
+
+    let eapi = *EAPI_LATEST_OFFICIAL;
+    let mut group = c.benchmark_group("comparison/complex_dep");
+    let input = complex_dep();
+
+    group.bench_function("portage-atom", |b| {
+        b.iter(|| black_box(portage_atom::DepEntry::parse(black_box(input)).unwrap()))
+    });
+
+    group.bench_function("pkgcraft", |b| {
+        b.iter(|| {
+            black_box(DependencySet::package(black_box(input), eapi).unwrap())
+        })
+    });
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_portage_atom,
+    bench_portage_metadata,
+    bench_pkgcraft,
+    bench_comparison,
+);
+criterion_main!(benches);

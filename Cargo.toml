@@ -1,0 +1,20 @@
+[package]
+name = "portage-bench"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+portage-atom = "0.7"
+portage-metadata = "0.5"
+pkgcraft = { path = "../pkgcraft/crates/pkgcraft" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "dep_parsing"
+harness = false
+
+[[bench]]
+name = "realworld_dep_parsing"
+harness = false
