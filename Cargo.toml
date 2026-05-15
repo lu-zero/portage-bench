@@ -4,9 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-portage-atom = "0.7"
-portage-metadata = "0.5"
+portage-atom = { path = "../portage-atom" }
+portage-metadata = { path = "../portage-metadata" }
+portage-repo = { path = "../portage-repo" }
+portage-atom-pubgrub = { path = "../portage-atom-pubgrub" }
+portage-atom-resolvo = { path = "../portage-atom-resolvo" }
+pubgrub = "0.4"
+resolvo = "0.10.2"
 pkgcraft = { path = "../pkgcraft/crates/pkgcraft" }
+clap = { version = "4", features = ["derive"] }
+camino = "1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -18,3 +25,7 @@ harness = false
 [[bench]]
 name = "realworld_dep_parsing"
 harness = false
+
+[patch.crates-io]
+portage-atom = { path = "../portage-atom" }
+portage-metadata = { path = "../portage-metadata" }

@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 
 fn simple_dep() -> &'static str {
     "dev-libs/openssl"
@@ -50,8 +50,7 @@ fn bench_portage_metadata(c: &mut Criterion) {
     group.bench_function("required_use", |b| {
         b.iter(|| {
             black_box(
-                portage_metadata::RequiredUseExpr::parse(black_box(required_use_string()))
-                    .unwrap(),
+                portage_metadata::RequiredUseExpr::parse(black_box(required_use_string())).unwrap(),
             )
         })
     });
@@ -77,9 +76,7 @@ fn bench_pkgcraft(c: &mut Criterion) {
     }
 
     group.bench_function("required_use", |b| {
-        b.iter(|| {
-            black_box(DependencySet::required_use(black_box(required_use_string())).unwrap())
-        })
+        b.iter(|| black_box(DependencySet::required_use(black_box(required_use_string())).unwrap()))
     });
 
     group.finish();
@@ -98,9 +95,7 @@ fn bench_comparison(c: &mut Criterion) {
     });
 
     group.bench_function("pkgcraft", |b| {
-        b.iter(|| {
-            black_box(DependencySet::package(black_box(input), eapi).unwrap())
-        })
+        b.iter(|| black_box(DependencySet::package(black_box(input), eapi).unwrap()))
     });
 
     group.finish();

@@ -1,7 +1,7 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use portage_atom::DepEntry;
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use pkgcraft::dep::DependencySet;
 use pkgcraft::eapi::EAPI_LATEST_OFFICIAL;
+use portage_atom::DepEntry;
 
 const TEXLIVE_RDEPEND: &str = "\
 >=app-text/texlive-core-2023-r1\n\
