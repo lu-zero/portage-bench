@@ -95,8 +95,8 @@ fn load_repo(path: &PathBuf, keyword: &str) -> RepoData {
 mod pubgrub_solver {
     use super::*;
     use portage_atom_pubgrub::{
-        PackageDeps, PackageRepository, PackageVersions, PortageDependencyProvider, PortagePackage,
-        PortageVersionSet, UseConfig,
+        IUseDefault, PackageDeps, PackageRepository, PackageVersions, PortageDependencyProvider,
+        PortagePackage, PortageVersionSet, UseConfig,
     };
 
     pub struct Adapter<'a> {
@@ -139,6 +139,23 @@ mod pubgrub_solver {
                                 .iter()
                                 .map(|iu| Interned::intern(iu.name()))
                                 .collect();
+                            let iuse_defaults: HashMap<Interned<DefaultInterner>, IUseDefault> =
+                                meta.iuse
+                                    .iter()
+                                    .filter_map(|iu| {
+                                        iu.default.map(|d| {
+                                            let val = match d {
+                                                portage_metadata::IUseDefault::Enabled => {
+                                                    IUseDefault::Enabled
+                                                }
+                                                portage_metadata::IUseDefault::Disabled => {
+                                                    IUseDefault::Disabled
+                                                }
+                                            };
+                                            (Interned::intern(iu.name()), val)
+                                        })
+                                    })
+                                    .collect();
                             let deps = PackageDeps {
                                 depend: meta.depend.clone(),
                                 rdepend: meta.rdepend.clone(),
@@ -153,6 +170,7 @@ mod pubgrub_solver {
                                     subslot,
                                     repo,
                                     iuse,
+                                    iuse_defaults,
                                     deps,
                                 },
                             )
