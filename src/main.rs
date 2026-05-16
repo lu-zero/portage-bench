@@ -179,32 +179,6 @@ mod pubgrub_solver {
                 })
                 .unwrap_or_default()
         }
-
-        fn slots_for(&self, cpn: &Cpn) -> Vec<Interned<DefaultInterner>> {
-            self.data
-                .versions
-                .get(cpn)
-                .map(|entries| {
-                    let mut slots: Vec<Interned<DefaultInterner>> = entries
-                        .iter()
-                        .filter(|(_, cache)| {
-                            keyword_accepts(&cache.metadata.keywords, &self.data.keyword)
-                        })
-                        .filter_map(|(_, cache)| {
-                            let s = &cache.metadata.slot.slot;
-                            if s.as_str().is_empty() {
-                                None
-                            } else {
-                                Some(*s)
-                            }
-                        })
-                        .collect();
-                    slots.sort_by(|a, b| a.as_str().cmp(b.as_str()));
-                    slots.dedup();
-                    slots
-                })
-                .unwrap_or_default()
-        }
     }
 
     pub fn resolve(data: &RepoData, targets: &[String]) -> Result<Vec<String>, String> {
