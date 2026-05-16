@@ -187,6 +187,9 @@ mod pubgrub_solver {
                 .map(|entries| {
                     let mut slots: Vec<Interned<DefaultInterner>> = entries
                         .iter()
+                        .filter(|(_, cache)| {
+                            keyword_accepts(&cache.metadata.keywords, &self.data.keyword)
+                        })
                         .filter_map(|(_, cache)| {
                             let s = &cache.metadata.slot.slot;
                             if s.as_str().is_empty() {
@@ -206,7 +209,24 @@ mod pubgrub_solver {
 
     pub fn resolve(data: &RepoData, targets: &[String]) -> Result<Vec<String>, String> {
         let adapter = Adapter::new(data);
-        let use_config = UseConfig::new();
+        let mut use_config = UseConfig::new();
+        for flag in &[
+            "acl", "arm64", "big-endian", "bzip2", "cpu_flags_arm_edsp",
+            "cpu_flags_arm_v8", "cpu_flags_arm_vfp", "cpu_flags_arm_vfp-d32",
+            "cpu_flags_arm_vfpv3", "cpu_flags_arm_vfpv4", "crypt", "dist",
+            "elibc_glibc", "gdbm", "iconv", "ipv6", "kernel_linux", "libtirpc",
+            "llvm_targets_AArch64", "llvm_targets_RISCV", "mimalloc", "ncurses",
+            "nls", "npm", "openmp", "pam", "pcre",
+            "python_single_target_python3_13", "python_targets_python3_13",
+            "python_targets_python3_14", "qemu", "readline", "relapack",
+            "rust-analyzer", "rust-src", "seccomp", "split-usr", "ssl",
+            "test-rust", "unicode", "xattr", "zlib",
+        ] {
+            use_config.enable(Interned::intern(flag));
+        }
+        for flag in &["pthread"] {
+            use_config.disable(Interned::intern(flag));
+        }
         let mut provider = PortageDependencyProvider::new(adapter, use_config);
 
         let root = PortagePackage::unslotted(Cpn::parse("virtual/root").unwrap());
@@ -264,6 +284,27 @@ mod pubgrub_solver {
         }
 
         provider.add_root(root.clone(), root_ver.clone(), root_deps);
+
+        let dropped = provider.dropped_deps();
+        if !dropped.is_empty() {
+            let mut cpns: Vec<String> = dropped
+                .iter()
+                .map(|(pkg, _)| format!("{}", pkg.cpn))
+                .collect();
+            cpns.sort();
+            cpns.dedup();
+            eprintln!(
+                "WARNING: {} dropped deps ({} unique CPNs):",
+                dropped.len(),
+                cpns.len()
+            );
+            for cpn in cpns.iter().take(80) {
+                eprintln!("  {}", cpn);
+            }
+            if cpns.len() > 80 {
+                eprintln!("  ... and {} more", cpns.len() - 80);
+            }
+        }
 
         let start = Instant::now();
         match pubgrub::resolve(&provider, root.clone(), root_ver) {
@@ -363,12 +404,17 @@ mod resolvo_solver {
                                 .collect();
                             let repo =
                                 Some(Interned::<DefaultInterner>::intern(&self.data.repo_name));
+                            let use_flags: HashSet<Interned<DefaultInterner>> = meta
+                                .iuse
+                                .iter()
+                                .map(|iu| Interned::intern(iu.name()))
+                                .collect();
                             PackageMetadata {
                                 cpv: cpv.clone(),
                                 slot,
                                 subslot,
-                                iuse,
-                                use_flags: HashSet::new(),
+                                iuse: use_flags.iter().copied().collect(),
+                                use_flags,
                                 repo,
                                 dependencies: PackageDeps {
                                     depend: meta.depend.clone(),
@@ -389,6 +435,21 @@ mod resolvo_solver {
         let adapter = Adapter::new(data);
         let use_config = UseConfig::default();
         let mut provider = PortageDependencyProvider::new(&adapter, &use_config);
+
+        // Debug: find names with no candidates
+        {
+            let pool = provider.pool();
+            let empty_names: Vec<_> = provider.debug_empty_candidates();
+            if !empty_names.is_empty() {
+                eprintln!("WARNING: {} names with no candidates after construction:", empty_names.len());
+                for name in &empty_names[..empty_names.len().min(20)] {
+                    eprintln!("  {}", name);
+                }
+                if empty_names.len() > 20 {
+                    eprintln!("  ... and {} more", empty_names.len() - 20);
+                }
+            }
+        }
 
         let mut requirements = Vec::new();
         for target in targets {
@@ -427,11 +488,21 @@ mod resolvo_solver {
             }
             Err(e) => {
                 let elapsed = start.elapsed();
-                Err(format!(
-                    "Resolvo: no solution in {:.1}ms: {:?}",
-                    elapsed.as_secs_f64() * 1000.0,
-                    e
-                ))
+                if let resolvo::UnsolvableOrCancelled::Unsolvable(conflict) = &e {
+                    let report = conflict.display_user_friendly(&solver);
+                    eprintln!(
+                        "Resolvo: no solution in {:.1}ms:\n{}",
+                        elapsed.as_secs_f64() * 1000.0,
+                        report
+                    );
+                    Err(format!("Resolvo: no solution in {:.1}ms (see above)", elapsed.as_secs_f64() * 1000.0))
+                } else {
+                    Err(format!(
+                        "Resolvo: error in {:.1}ms: {:?}",
+                        elapsed.as_secs_f64() * 1000.0,
+                        e
+                    ))
+                }
             }
         }
     }
